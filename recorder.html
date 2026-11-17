@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Запись вебинара</title>
+<link rel="stylesheet" href="style.css">
+<main>
+  <p class="eyebrow">ЛОКАЛЬНО · БЕЗ СЕРВЕРА</p>
+  <h1>Запись вебинара</h1>
+  <p>Записывается вкладка, на которой вы нажали значок расширения. Можно переключаться между окнами и сворачивать браузер.</p>
+  <div class="panel">
+    <p id="status" role="status" aria-live="polite">Готово к записи</p>
+    <div id="timer">00:00:00</div>
+    <p id="size">0 МБ</p>
+    <label>Качество <select id="quality"><option value="2500000">Обычное · 2,5 Мбит/с</option><option value="5000000">Высокое · 5 Мбит/с</option></select></label>
+    <div class="buttons"><button id="start">Выбрать файл и начать</button><button id="stop" disabled>Остановить и сохранить</button></div>
+  </div>
+  <p id="file"></p>
+  <p>Не закрывайте эту вкладку и вкладку вебинара. Для завершения нажмите «Остановить и сохранить» и дождитесь подтверждения. Компьютер должен оставаться включённым.</p>
+  <p class="note">Звук — только из вкладки, микрофон не записывается. Если сайт сам останавливает видео в фоне или запрещает захват, запись может остановиться или быть чёрной. Сначала проверьте короткую запись своего вебинара.</p>
+</main>
+<script type="module" src="recorder.js"></script>
+</html>

@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Запись вебинара",
+  "version": "1.0.0",
+  "description": "Локальная запись вкладки вебинара со звуком, в том числе в фоне.",
+  "minimum_chrome_version": "116",
+  "permissions": ["tabCapture", "activeTab", "power"],
+  "action": {"default_title": "Записать эту вкладку"},
+  "background": {"service_worker": "background.js"}
+}
