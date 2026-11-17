@@ -3,3 +3,7 @@ node_modules/
 *.mp4
 *.zip
 .env*
+*.partial
+dist/
+build/
+__pycache__/

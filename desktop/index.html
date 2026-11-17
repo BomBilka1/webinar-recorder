@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; media-src 'self' blob:; img-src 'self' data:">
+<title>Запись вебинара</title>
+<link rel="stylesheet" href="style.css">
+<main>
+  <header><span class="brand">● WEBINAR RECORDER</span><span class="local">Сохранение на ваш компьютер</span></header>
+  <h1>Вебинар в записи.<br><span>Работайте дальше.</span></h1>
+  <p class="intro">Откройте вебинар внутри программы — его видео и звук будут записываться, даже когда окно свёрнуто.</p>
+  <section>
+    <label for="url">Ссылка на вебинар</label>
+    <div class="row"><input id="url" type="url" placeholder="https://…" autocomplete="off"><button id="open">Открыть вебинар</button></div>
+    <button class="link" id="reveal">Показать окно вебинара</button>
+    <div class="grid">
+      <div><label for="mode">Что записывать</label><select id="mode"><option value="webinar">Вебинар внутри программы</option><option value="desktop">Экран или другое окно</option></select></div>
+      <div><label for="source">Источник</label><div class="row"><select id="source"><option value="">Сначала откройте вебинар</option></select><button id="refresh" title="Обновить список" aria-label="Обновить список источников">↻</button></div></div>
+    </div>
+    <p id="hint" class="hint">Войдите на сайт и запустите видео в открывшемся окне. Если вебинар открылся в новом окне — обновите список и выберите его.</p>
+    <div class="grid settings">
+      <div><label for="quality">Качество</label><select id="quality"><option value="2500000">Обычное · ≈ 1,2 ГБ/час</option><option value="5000000">Высокое · ≈ 2,3 ГБ/час</option></select></div>
+      <label class="check"><input type="checkbox" id="audio" checked> Записывать звук</label>
+    </div>
+  </section>
+  <section class="recording">
+    <div><span id="dot" class="dot"></span><span id="status" role="status" aria-live="polite">Готово к записи</span></div>
+    <div class="numbers"><strong id="timer">00:00:00</strong><span id="size">0 МБ</span></div>
+    <div class="row actions"><button id="start">● Начать запись</button><button id="pause" disabled>Пауза</button><button id="stop" disabled>Остановить и сохранить</button></div>
+    <p id="file" class="hint"></p>
+    <button class="link" id="show" hidden>Показать файл в папке ↗</button>
+  </section>
+  <p id="notice" role="alert"></p>
+  <footer>Не выключайте компьютер. В конце нажмите «Остановить и сохранить». При записи другого приложения свёрнутый источник может перестать обновляться.</footer>
+</main>
+<script src="renderer.js"></script>
+</html>
