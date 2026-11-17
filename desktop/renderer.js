@@ -117,7 +117,7 @@ function release() {
 }
 function stop() {
   if (recorder && recorder.state !== 'inactive') {
-    status('Сохранение файла…');
+    status('Сохранение и подготовка перемотки…');
     el('stop').disabled = true;
     el('pause').disabled = true;
     recorder.stop();

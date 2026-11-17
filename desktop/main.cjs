@@ -2,6 +2,7 @@ const {app, BrowserWindow, ipcMain, dialog, session, desktopCapturer,
   powerSaveBlocker, shell, Tray, Menu, nativeImage, screen} = require('electron');
 const path = require('node:path');
 const {FileSession} = require('./file-session.cjs');
+const {indexWebM} = require('./webm-index.cjs');
 const {UpdateManager} = require('./update-manager.cjs');
 const {existsSync} = require('node:fs');
 const {captureTypes,selectSource,describeSources} = require('./capture-sources.cjs');
@@ -174,7 +175,7 @@ app.whenReady().then(async () => {
   handle('finish', async () => {
     if (!file) throw new Error('Нет открытого файла');
     const current = file;
-    try {const result = await current.finish();lastFile = result.path;return result;}
+    try {const result = await current.finish(indexWebM);lastFile = result.path;return result;}
     finally {file = null;selection = null;releasePower();updates?.onIdle();}
   });
   handle('abort', async () => {

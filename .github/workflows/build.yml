@@ -27,6 +27,13 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm test
       - run: node --check desktop/main.cjs && node --check desktop/renderer.js
+      - name: Install recording test runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb ffmpeg libnss3 libgbm1 libasound2t64
+          node node_modules/electron/install.js
+      - name: Record hidden webinar and seek saved video forward and backward
+        run: xvfb-run -a npm run test:desktop
   windows:
     needs: tests
     runs-on: windows-latest

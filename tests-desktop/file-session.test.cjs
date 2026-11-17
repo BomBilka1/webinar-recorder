@@ -55,3 +55,13 @@ test('empty aborted recordings are removed', async t => {
   await file.abort();
   await assert.rejects(fs.access(file.partial));
 });
+
+test('indexing failure preserves original partial and existing destination', async t => {
+  const dest = await fixture(t);
+  await fs.writeFile(dest,'previous');
+  const file=await FileSession.open(dest);
+  await file.write(Buffer.from('recording'));
+  await assert.rejects(file.finish(async()=>{throw new Error('Index failed');}),/Index failed/);
+  assert.equal(await fs.readFile(file.partial,'utf8'),'recording');
+  assert.equal(await fs.readFile(dest,'utf8'),'previous');
+});

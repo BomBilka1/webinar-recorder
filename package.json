@@ -1,7 +1,7 @@
 {
   "name": "webinar-recorder",
   "productName": "Webinar Recorder",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Настольная запись вебинаров со звуком в фоне",
   "private": true,
   "main": "desktop/main.cjs",

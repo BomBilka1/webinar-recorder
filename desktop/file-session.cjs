@@ -40,7 +40,7 @@ class FileSession {
     this.pending = operation.catch(() => {});
     return operation;
   }
-  async finish() {
+  async finish(finalize) {
     this.closed = true;
     await this.pending;
     try {
@@ -51,6 +51,8 @@ class FileSession {
       await fs.unlink(this.partial);
       throw new Error('Видеоданные не получены; пустой файл удалён');
     }
+    if (finalize) await finalize(this.partial);
+    this.bytes = (await fs.stat(this.partial)).size;
     await fs.rename(this.partial, this.destination);
     return { path:this.destination, bytes:this.bytes };
   }

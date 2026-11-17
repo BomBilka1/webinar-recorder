@@ -57,6 +57,27 @@ document.querySelector('button').onclick=()=>{window.audio=new AudioContext();co
     const probe = JSON.parse(execFileSync('ffprobe',['-v','error','-show_streams','-show_format','-of','json',output],{encoding:'utf8'}));
     assert.ok(probe.streams.some(s=>s.codec_type==='video'));
     assert.ok(probe.streams.some(s=>s.codec_type==='audio'));
+    assert.ok(Number(probe.format.duration)>5,'Saved WebM must declare a finite duration');
+    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith('file:')).show());
+    const encoded=(await fs.readFile(output)).toString('base64');
+    const playback=await ui.evaluate(async encoded=>{
+      const data=Uint8Array.from(atob(encoded),c=>c.charCodeAt(0));
+      const video=document.createElement('video');video.muted=true;
+      const url=URL.createObjectURL(new Blob([data],{type:'video/webm'}));video.src=url;
+      const wait=event=>new Promise((resolve,reject)=>{
+        const timer=setTimeout(()=>reject(new Error('Playback timeout: '+event)),10000);
+        video.addEventListener(event,()=>{clearTimeout(timer);resolve();},{once:true});
+        video.addEventListener('error',()=>{clearTimeout(timer);reject(new Error('Playback error'));},{once:true});
+      });
+      await wait('loadedmetadata');
+      const duration=video.duration;
+      for(const time of [3,1,4]) {const done=wait('seeked');video.currentTime=time;await done;}
+      const time=video.currentTime;video.removeAttribute('src');video.load();URL.revokeObjectURL(url);
+      return {duration,time};
+    },encoded);
+    assert.ok(Number.isFinite(playback.duration) && playback.duration>5);
+    assert.equal(playback.time,4,'Saved video must seek forward and backward');
+
     const timestamps=execFileSync('ffprobe',['-v','error','-show_entries','packet=pts_time','-of','csv=p=0',output],{encoding:'utf8'}).trim().split('\n').map(Number);
     const recordedSeconds=Math.max(...timestamps.filter(Number.isFinite));
     assert.ok(recordedSeconds>5,`Recorded duration: ${recordedSeconds}`);
