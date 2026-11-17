@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.20)
+project(RecorderWindows LANGUAGES CXX)
+add_executable(recorder-windows windows.cpp)
+target_compile_features(recorder-windows PRIVATE cxx_std_17)
+target_compile_definitions(recorder-windows PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_link_libraries(recorder-windows PRIVATE mmdevapi ole32 user32)
+set_property(TARGET recorder-windows PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")

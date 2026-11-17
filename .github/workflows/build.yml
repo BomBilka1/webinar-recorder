@@ -34,6 +34,8 @@ jobs:
           node node_modules/electron/install.js
       - name: Record hidden webinar and seek saved video forward and backward
         run: xvfb-run -a npm run test:desktop
+      - name: Verify microphone, MP4, splitting, schedule, warnings and recovery
+        run: xvfb-run -a npm run test:features
   windows:
     needs: tests
     runs-on: windows-latest
@@ -48,6 +50,16 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Build Windows window-state and application-audio helper
+        run: |
+          cmake -S native -B native/build -A x64
+          cmake --build native/build --config Release
+          & ./native/build/Release/recorder-windows.exe self-test
+          if ($LASTEXITCODE -ne 0) { throw 'Native window-state self-test failed' }
+          Start-Service AudioEndpointBuilder
+          Start-Service Audiosrv
+          & ./native/build/Release/recorder-windows.exe audio-probe > $null
+          if ($LASTEXITCODE -ne 0) { throw 'WASAPI process capture initialization failed' }
       - name: Build Windows installer and update metadata
         run: npm run dist:win -- --publish never
         env:

@@ -21,6 +21,14 @@ def main():
     parser.add_argument('--platform', choices=['win32', 'linux'], default='win32')
     parser.add_argument('--out', type=Path, default=ROOT / 'dist')
     args = parser.parse_args()
+    tools = []
+    if args.platform == 'win32':
+        tools = [(ROOT / 'node_modules/ffmpeg-static/ffmpeg.exe', 'ffmpeg.exe'),
+                 (ROOT / 'node_modules/ffmpeg-static/ffmpeg.exe.LICENSE', 'FFMPEG-LICENSE.txt'),
+                 (ROOT / 'node_modules/ffmpeg-static/ffmpeg.exe.README', 'FFMPEG-README.txt'),
+                 (ROOT / 'native/build/Release/recorder-windows.exe', 'recorder-windows.exe')]
+        if any(not file.is_file() for file, _ in tools):
+            raise RuntimeError('Build Windows tools first: npm ci; cmake -S native -B native/build -A x64; cmake --build native/build --config Release')
     package = json.loads((ROOT / 'package.json').read_text())
     version = package['devDependencies']['electron']
     artifact = f'electron-v{version}-{args.platform}-x64.zip'
@@ -59,6 +67,9 @@ def main():
             for file in sorted((ROOT / 'desktop').rglob('*')):
                 if file.is_file():
                     bundle.write(file, prefix + 'resources/app/' + file.relative_to(ROOT).as_posix())
+            for file, name in tools:
+                bundle.write(file, prefix + 'resources/bin/' + name)
+            bundle.write(ROOT / 'THIRD_PARTY.txt', prefix + 'THIRD-PARTY.txt')
             bundle.write(ROOT / 'USER_GUIDE.txt', prefix + 'READ-ME.txt')
         building.replace(destination)
         print(f'Built: {destination} ({destination.stat().st_size / 1048576:.1f} MB)', flush=True)

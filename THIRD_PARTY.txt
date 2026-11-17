@@ -1,0 +1,20 @@
+FFmpeg
+The Windows distribution includes FFmpeg 6.1.1 from ffmpeg-static release b6.1.1.
+FFmpeg is run as a separate program for MP4 conversion and WebM recovery.
+Upstream notices and licence are installed in resources/bin/FFMPEG-README.txt
+and resources/bin/FFMPEG-LICENSE.txt. Preserve these when redistributing.
+Binary distribution and build/source references:
+https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1
+https://github.com/eugeneware/ffmpeg-static
+https://ffmpeg.org/releases/ffmpeg-6.1.1.tar.xz
+https://ffmpeg.org/legal.html
+
+Electron and Chromium
+Electron and its included components retain their upstream licences, supplied
+with the runtime and Windows installer.
+https://github.com/electron/electron
+
+Windows capture helper
+The helper in native/ uses Windows WASAPI process loopback APIs described at:
+https://learn.microsoft.com/en-us/samples/microsoft/windows-classic-samples/applicationloopbackaudio-sample/
+It uses Windows SDK headers/libraries and has no third-party runtime dependency.

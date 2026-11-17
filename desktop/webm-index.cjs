@@ -106,6 +106,8 @@ async function indexWebM(filename) {
     }
     await write(index);await output.sync();await output.close();output=null;
     await input.close();await fs.rename(temporary,filename);owned=false;
+    const scale=children(info.body).find(e=>e.id===0x2ad7b1);
+    return {duration:(maxTime+1)*(scale?number(scale.data):1000000)/1e9};
   } finally {await input.close().catch(()=>{});await output?.close().catch(()=>{});if(owned)await fs.unlink(temporary).catch(()=>{});}
 }
 module.exports={indexWebM};

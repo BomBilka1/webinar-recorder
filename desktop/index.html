@@ -26,15 +26,43 @@
       <div><label for="quality">Качество</label><select id="quality"><option value="2500000">Обычное · ≈ 1,2 ГБ/час</option><option value="5000000">Высокое · ≈ 2,3 ГБ/час</option></select></div>
       <label class="check"><input type="checkbox" id="audio" checked> <span id="audio-label">Звук системы</span></label>
     </div>
+    <div class="grid">
+      <div><label for="audio-scope">Источник звука</label><select id="audio-scope"><option value="system">Вся система</option><option value="application">Выбранное приложение</option></select><p id="audio-help" class="hint"></p></div>
+      <div><label class="check"><input type="checkbox" id="microphone"> Добавить микрофон</label><select id="microphone-device" aria-label="Микрофон"><option value="">По умолчанию</option></select><button class="link" id="microphone-choose">Выбрать микрофон…</button></div>
+    </div>
+    <div class="grid meters"><label>Источник <meter id="source-level" min="0" max="1" value="0"></meter></label><label>Микрофон <meter id="mic-level" min="0" max="1" value="0"></meter></label></div>
+    <div class="grid">
+      <div><label for="format">Формат файла</label><select id="format"><option value="webm">WebM · быстрое сохранение</option><option value="mp4">MP4 · с конвертацией</option></select></div>
+      <div><label for="split">Разделять на файлы каждые</label><select id="split"><option value="0">Не разделять</option><option value="1">1 минуту</option><option value="15">15 минут</option><option value="30">30 минут</option><option value="60">1 час</option></select></div>
+    </div>
+    <p class="hint">MP4 сохраняется без удаления исходного WebM. Для обработки требуется дополнительное место на диске.</p>
+    <details><summary>Расписание и автоматическая остановка</summary>
+      <div class="grid">
+        <div><label for="schedule-start">Начать (местное время)</label><input id="schedule-start" type="datetime-local"></div>
+        <div><label for="schedule-end">Закончить (местное время)</label><input id="schedule-end" type="datetime-local"></div>
+        <div><label for="duration">Или остановить через, минут</label><input id="duration" type="number" min="0" max="10080" value="0"></div>
+      </div>
+      <p class="hint">Нажмите «Начать запись» заранее и выберите файл. Программа и источник должны оставаться открыты; компьютер — включён. Вебинар нужно запустить самостоятельно. Время окончания имеет приоритет над длительностью; пауза его не переносит.</p>
+    </details>
   </section>
   <section class="recording">
     <div><span id="dot" class="dot"></span><span id="status" role="status" aria-live="polite">Готово к записи</span></div>
     <div class="numbers"><strong id="timer">00:00:00</strong><span id="size">0 МБ</span></div>
     <div class="row actions"><button id="start">● Начать запись</button><button id="pause" disabled>Пауза</button><button id="stop" disabled>Остановить и сохранить</button></div>
     <p id="file" class="hint"></p>
+    <p id="disk" class="hint"></p>
+    <p id="capture-warning" class="warning" role="status" aria-live="polite"></p>
+    <video id="monitor-video" muted playsinline hidden></video>
+    <canvas id="monitor" width="160" height="90" hidden aria-label="Предпросмотр записи"></canvas>
     <button class="link" id="show" hidden>Показать файл в папке ↗</button>
   </section>
   <p id="notice" role="alert"></p>
+  <section class="library">
+    <div class="row"><strong>Мои записи</strong><button class="link" id="history-refresh">Обновить</button></div>
+    <button id="repair" class="link">Восстановить перемотку / незавершённый WebM</button>
+    <p id="recovery-notice" class="warning"></p>
+    <div id="history-list"></div>
+  </section>
   <section class="updates">
     <div class="row"><strong>Обновления</strong><span id="version" class="hint"></span></div>
     <p id="update-status" class="hint" role="status" aria-live="polite">Проверка версии программы…</p>

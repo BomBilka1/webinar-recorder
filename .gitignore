@@ -10,3 +10,5 @@ __pycache__/
 release/
 delivery/
 *.zip.0*
+
+native/build/

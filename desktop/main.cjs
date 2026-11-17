@@ -1,8 +1,13 @@
 const {app, BrowserWindow, ipcMain, dialog, session, desktopCapturer,
   powerSaveBlocker, shell, Tray, Menu, nativeImage, screen} = require('electron');
 const path = require('node:path');
-const {FileSession} = require('./file-session.cjs');
-const {indexWebM} = require('./webm-index.cjs');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const {RecordingLibrary} = require('./recording-library.cjs');
+const {RecordingSession} = require('./recording-session.cjs');
+const {MediaTools} = require('./media-tools.cjs');
+const {Schedule,planTimes} = require('./schedule.cjs');
+const {WindowsCapture} = require('./windows-capture.cjs');
 const {UpdateManager} = require('./update-manager.cjs');
 const {existsSync} = require('node:fs');
 const {captureTypes,selectSource,describeSources} = require('./capture-sources.cjs');
@@ -10,13 +15,14 @@ const {captureTypes,selectSource,describeSources} = require('./capture-sources.c
 // Capturing a webContents keeps rendering independent of the desktop window.
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
-let control, webinar, tray, file, selection, power, lastFile, preparing = false, paintTimer, updates;
+let audioOutstanding=0;
+let control, webinar, tray, file, selection, power, lastFile, preparing = false, paintTimer, updates, schedule, timing, library, media, nativeCapture, maintenance = false, microphoneSetupUntil = 0;
 const browsers = new Set();
 const isTest = process.env.WEBINAR_TEST === '1' && !app.isPackaged;
 if (isTest && process.env.WEBINAR_TEST_PROFILE) app.setPath('userData', process.env.WEBINAR_TEST_PROFILE);
 
 function notice(message) { control?.webContents.send('notice', message); }
-function busy() { return Boolean(file) || preparing; }
+function busy() { return Boolean(file) || preparing || maintenance; }
 function validateURL(value) {
   const url = new URL(String(value));
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Укажите ссылку http:// или https://');
@@ -61,6 +67,7 @@ function handle(name, fn) {
 }
 function releasePower() {
   clearInterval(paintTimer);
+  schedule?.dispose();schedule=null;nativeCapture?.stop();
   if (power !== undefined && powerSaveBlocker.isStarted(power)) powerSaveBlocker.stop(power);
   power = undefined;
 }
@@ -80,27 +87,42 @@ app.whenReady().then(async () => {
   });
   control.on('closed', () => { for (const win of browsers) win.destroy(); app.quit(); });
   control.webContents.on('render-process-gone', async () => {
+    releasePower();
     if (file) { const current = file; file = null; await current.abort().catch(() => {}); }
     releasePower(); app.quit();
   });
+  const binary=process.platform==='win32' ? (app.isPackaged?path.join(process.resourcesPath,'bin','ffmpeg.exe'):path.join(__dirname,'../node_modules/ffmpeg-static/ffmpeg.exe')) : '/usr/bin/ffmpeg';
+  const nativeBinary=app.isPackaged ? path.join(process.resourcesPath,'bin','recorder-windows.exe') : path.join(__dirname,'../native/build/Release/recorder-windows.exe');
+  const nativeAvailable=process.platform==='win32' && existsSync(nativeBinary);
+  nativeCapture=new WindowsCapture(nativeAvailable?nativeBinary:null);
+  library=new RecordingLibrary(path.join(app.getPath('userData'),'recordings.json'));
+  await library.load();
+  const notify=(name,data)=>control?.webContents.send(name,data);
+  media=new MediaTools({binary:existsSync(binary)?binary:null,notify:data=>notify('processing',data)});
+  const capabilities={mp4:!!media.binary,nativeWindowState:nativeAvailable,
+    applicationAudio:nativeAvailable && Number(os.release().split('.')[2])>=20348};
+  handle('capabilities',()=>capabilities);
+  handle('microphone-access',enabled=>{microphoneSetupUntil=enabled && !busy()?Date.now()+30000:0;return microphoneSetupUntil>0;});
   const localSession = control.webContents.session;
-  localSession.setPermissionRequestHandler((contents, permission, callback) => {
-    callback(contents === control.webContents && permission === 'display-capture' && Boolean(file));
+  localSession.setPermissionRequestHandler((contents, permission, callback, details) => {
+    const microphone=permission==='media' && ((file && selection?.microphone) || Date.now()<microphoneSetupUntil) && details.mediaTypes?.length && details.mediaTypes.every(t=>t==='audio');
+    callback(contents === control.webContents && ((permission==='display-capture' && Boolean(file)) || !!microphone));
   });
-  localSession.setPermissionCheckHandler((contents, permission) =>
-    contents === control.webContents && permission === 'display-capture' && Boolean(file));
+  localSession.setPermissionCheckHandler((contents, permission, _origin, details) =>
+    contents === control.webContents && ((permission==='display-capture' && Boolean(file)) ||
+      (permission==='media' && ((file && selection?.microphone) || Date.now()<microphoneSetupUntil) && details.mediaType!=='video')));
   localSession.setDisplayMediaRequestHandler(async (request, callback) => {
     try {
       if (request.frame !== control.webContents.mainFrame || !file || !selection) return callback(null);
-      if (selection.mode === 'webinar') {
+      if (selection.browserId) {
         const target = BrowserWindow.fromId(selection.browserId);
         if (!target || !browsers.has(target)) return callback(null);
         const frame = target.webContents.mainFrame;
-        callback({video:frame, ...(selection.audio ? {audio:frame,enableLocalEcho:true} : {})});
+        callback({video:frame, ...(selection.audio ? {audio:selection.audioScope==='system'?'loopback':frame,enableLocalEcho:true} : {})});
       } else {
         const sources = await desktopCapturer.getSources({types:captureTypes(selection.mode),thumbnailSize:{width:0,height:0}});
         const source = selectSource(sources,selection.mode,selection.sourceId,control.getMediaSourceId());
-        callback({video:source,...(selection.audio && process.platform === 'win32' ? {audio:'loopback'} : {})});
+        callback({video:source,...(selection.audio && selection.audioScope!=='application' && process.platform === 'win32' ? {audio:'loopback'} : {})});
       }
     } catch (error) { notice(error.message); callback(null); }
   });
@@ -144,14 +166,28 @@ app.whenReady().then(async () => {
         const sources = await desktopCapturer.getSources({types:captureTypes(options.mode),thumbnailSize:{width:0,height:0}});
         selectSource(sources,options.mode,options.sourceId,control.getMediaSourceId());
       }
-      selection = {mode:options.mode,browserId:Number(options.browserId),sourceId:options.sourceId,audio:!!options.audio};
+      const own=options.mode==='window'?[...browsers].find(win=>win.getMediaSourceId()===options.sourceId):null;
+      const scope=options.audioScope || (options.mode==='webinar'?'application':'system');
+      if(!['application','system'].includes(scope))throw new Error('Выберите источник звука');
+      if(options.audio && scope==='application' && options.mode!=='webinar' && !own && (!capabilities.applicationAudio || options.mode!=='window'))
+        throw new Error('Звук отдельного приложения доступен для окна в Windows 11; для встроенного вебинара — во всех поддерживаемых системах');
+      const splitMinutes=Number(options.splitMinutes||0);
+      if(!Number.isFinite(splitMinutes)||splitMinutes<0||splitMinutes>1440)throw new Error('Разделение: от 0 до 1440 минут');
+      timing={...planTimes(options),durationMinutes:Number(options.durationMinutes||0),fixedEnd:!!options.endAt,scheduledStart:!!options.startAt};
+      selection={mode:options.mode,browserId:own?.id || (options.mode==='webinar'?Number(options.browserId):null),
+        sourceId:options.sourceId,audio:!!options.audio,audioScope:scope,microphone:!!options.microphone};
+      const format=options.format || 'webm';
+      if(!['webm','mp4'].includes(format))throw new Error('Выберите формат видео');
       const result = isTest ? {filePath:process.env.WEBINAR_TEST_OUTPUT,canceled:false} : await dialog.showSaveDialog(control, {
-        title:'Куда сохранить запись',defaultPath:path.join(app.getPath('videos'),`webinar-${new Date().toISOString().replace(/[:.]/g,'-')}.webm`),
-        filters:[{name:'Видео WebM',extensions:['webm']}]});
+        title:'Куда сохранить запись',defaultPath:path.join(app.getPath('videos'),`webinar-${new Date().toISOString().replace(/[:.]/g,'-')}.${format}`),
+        filters:[{name:`Видео ${format.toUpperCase()}`,extensions:[format]}]});
       if (result.canceled) {selection = null;return null;}
-      file = await FileSession.open(result.filePath);
+      const destination=result.filePath.toLowerCase().endsWith(`.${format}`)?result.filePath:`${result.filePath}.${format}`;
+      const recording=new RecordingSession({library,media,notify});
+      const prepared=await recording.start(destination,{format,splitMinutes,waiting:timing.startAt>Date.now()+500});
+      file=recording;
       power = powerSaveBlocker.start('prevent-app-suspension');
-      if (selection.mode === 'webinar') {
+      if (selection.browserId) {
         const target = BrowserWindow.fromId(selection.browserId);
         let painting = false;
         // Native hidden windows can stop submitting compositor frames even with
@@ -164,7 +200,7 @@ app.whenReady().then(async () => {
           catch {} finally {painting = false;}
         }, 40);
       }
-      return {name:path.basename(result.filePath),partial:file.partial};
+      return {...prepared,...timing,applicationAudio:selection.audio && selection.audioScope==='application' && !selection.browserId};
     } finally {preparing = false;}
   });
   handle('write', async data => {
@@ -172,19 +208,87 @@ app.whenReady().then(async () => {
       throw new Error('Недопустимый блок записи');
     return file.write(data);
   });
-  handle('finish', async () => {
+  handle('capture-ready', async () => {
+    if(!file || schedule)throw new Error('Запись не подготовлена');
+    if(!timing.scheduledStart)timing.startAt=Date.now();
+    if(!timing.fixedEnd && timing.durationMinutes)timing.endAt=Math.max(timing.startAt,Date.now())+timing.durationMinutes*60000;
+    if(timing.endAt && timing.endAt<=Date.now())throw new Error('Время окончания записи уже прошло');
+    const waiting=timing.startAt>Date.now()+200;
+    schedule=new Schedule({...timing,onStart:()=>{
+      library.patch(file.entry.id,{status:'recording'}).catch(e=>notice(e.message));notify('schedule-start',{});
+    },onStop:()=>notify('schedule-stop',{})});
+    if(selection.mode==='window' && !selection.browserId && nativeAvailable) {
+      nativeCapture.watch(selection.sourceId,state=>notify('window-state',state),e=>notice(e.message));
+    }
+    return {waiting,startAt:timing.startAt,endAt:timing.endAt};
+  });
+  handle('audio-ack', bytes=>{if(Number.isInteger(bytes) && bytes>0 && bytes<=1048576)audioOutstanding=Math.max(0,audioOutstanding-bytes);});
+  handle('application-audio', async () => {
+    if(!file || !selection?.audio || selection.audioScope!=='application' || selection.browserId || !capabilities.applicationAudio)
+      throw new Error('Звук приложения не выбран');
+    audioOutstanding=0;
+    await nativeCapture.audio(selection.sourceId,buffer=>{
+      audioOutstanding+=buffer.byteLength;
+      if(audioOutstanding>2*1048576){nativeCapture.stop();notify('audio-ended',{});return;}
+      if(file)notify('application-audio-data',buffer.buffer.slice(buffer.byteOffset,buffer.byteOffset+buffer.byteLength));
+    },error=>{if(file){notice(error.message);notify('audio-ended',{});}});
+    return true;
+  });
+  handle('rotate',async duration=>{
+    if(!file)throw new Error('Нет открытой записи');
+    return file.rotate(Math.min(14*86400,Math.max(0,Number(duration)||0)));
+  });
+  handle('finish', async duration => {
     if (!file) throw new Error('Нет открытого файла');
+    schedule?.dispose();schedule=null;nativeCapture.stop();
     const current = file;
-    try {const result = await current.finish(indexWebM);lastFile = result.path;return result;}
-    finally {file = null;selection = null;releasePower();updates?.onIdle();}
+    try {const result = await current.finish(Math.min(14*86400,Math.max(0,Number(duration)||0)));lastFile = result.path;return result;}
+    finally {file = null;selection = null;releasePower();updates?.onIdle();notify('history',{});}
   });
   handle('abort', async () => {
     if (!file) return null;
+    schedule?.dispose();schedule=null;nativeCapture.stop();
     const current = file;
-    try {const result = await current.abort();lastFile = result.path;return result;}
-    finally {file = null;selection = null;releasePower();updates?.onIdle();}
+    try {const result = await current.abort();lastFile = result?.path;return result;}
+    finally {file = null;selection = null;releasePower();updates?.onIdle();notify('history',{});}
   });
   handle('show-file', () => {if (lastFile) shell.showItemInFolder(lastFile);});
+  handle('history',()=>library.list());
+  handle('history-open',async (id,index,action)=>{
+    if(busy())throw new Error('Дождитесь завершения записи и обработки');
+    const entry=library.get(id),segment=entry.segments[Number(index)];
+    if(!segment)throw new Error('Файл не найден');
+    const candidates=segment.status==='completed'?[segment.path,segment.raw,segment.partial]:[segment.raw,segment.partial];
+    let target;for(const candidate of candidates)if(candidate && existsSync(candidate)){target=candidate;break;}
+    if(!target)throw new Error('Файл перемещён или удалён');
+    if(action==='folder')shell.showItemInFolder(target);
+    else if(action==='play'){const error=await shell.openPath(target);if(error)throw new Error(error);}
+    else throw new Error('Неизвестное действие');
+  });
+  handle('repair',async (id,index)=>{
+    if(busy() || updates?.installing)throw new Error('Сначала завершите запись и обработку');
+    maintenance=true;let powerId;
+    try {
+      powerId=powerSaveBlocker.start('prevent-app-suspension');
+      let input;
+      if(id){
+        const entry=library.get(id),segment=entry.segments[Number(index)];
+        if(!segment)throw new Error('Запись не найдена');
+        input=[segment.partial,segment.raw,segment.path].find(candidate=>candidate && existsSync(candidate));
+        if(!input)throw new Error('Исходный файл перемещён или удалён');
+      }else{
+        const result=await dialog.showOpenDialog(control,{title:'Выберите старую или незавершённую запись',properties:['openFile'],filters:[{name:'Записи WebM',extensions:['webm','partial']}]});
+        if(result.canceled)return null;input=result.filePaths[0];
+      }
+      const result=await dialog.showSaveDialog(control,{title:'Куда сохранить восстановленную копию',
+        defaultPath:input.replace(/\.partial$/i,'').replace(/\.webm$/i,'')+'.recovered.webm',filters:[{name:'WebM',extensions:['webm']}]});
+      if(result.canceled)return null;
+      const destination=result.filePath.toLowerCase().endsWith('.webm')?result.filePath:result.filePath+'.webm';
+      const repaired=await media.repair(input,destination);lastFile=repaired.path;
+      await library.add({status:'completed',format:'webm',duration:repaired.duration,segments:[{...repaired,raw:repaired.path,status:'completed'}],recovered:true});
+      notify('history',{});return repaired;
+    }finally{maintenance=false;if(powerId!==undefined)powerSaveBlocker.stop(powerId);updates?.onIdle();}
+  });
 
   const updateEnabled = app.isPackaged && process.platform === 'win32' &&
     existsSync(path.join(process.resourcesPath,'app-update.yml'));
