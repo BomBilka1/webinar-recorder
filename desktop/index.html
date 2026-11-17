@@ -31,6 +31,11 @@
     <button class="link" id="show" hidden>Показать файл в папке ↗</button>
   </section>
   <p id="notice" role="alert"></p>
+  <section class="updates">
+    <div class="row"><strong>Обновления</strong><span id="version" class="hint"></span></div>
+    <p id="update-status" class="hint" role="status" aria-live="polite">Проверка версии программы…</p>
+    <div class="row"><button id="check-update" class="link">Проверить обновления</button><button id="install-update" hidden>Установить и перезапустить</button></div>
+  </section>
   <footer>Не выключайте компьютер. В конце нажмите «Остановить и сохранить». При записи другого приложения свёрнутый источник может перестать обновляться.</footer>
 </main>
 <script src="renderer.js"></script>

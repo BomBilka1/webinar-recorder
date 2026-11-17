@@ -7,3 +7,6 @@ node_modules/
 dist/
 build/
 __pycache__/
+release/
+delivery/
+*.zip.0*

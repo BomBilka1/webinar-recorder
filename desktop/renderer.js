@@ -5,6 +5,7 @@ let busy = false, stream, recorder, pending = Promise.resolve(), failure,
 const controls = ['url','open','mode','source','refresh','quality','audio'];
 const message = text => {el('notice').textContent = text || '';};
 const status = text => {el('status').textContent = text;};
+let updateState;
 function clock() {
   const seconds = Math.floor((accumulated + (tick ? Date.now() - tick : 0)) / 1000);
   el('timer').textContent = [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
@@ -16,6 +17,7 @@ function lock(value) {
   controls.forEach(id => {el(id).disabled = value;});
   el('start').disabled = value;
   if (!value && el('mode').value === 'desktop' && api.platform !== 'win32') el('audio').disabled = true;
+  if (updateState) showUpdate(updateState);
 }
 async function refresh(preferred) {
   try {
@@ -165,4 +167,18 @@ el('pause').addEventListener('click', () => {
 });
 api.onNotice(message);
 api.onSourceEnded(() => {message('Страница вебинара завершила работу. Сохраняю доступную часть.');stop();});
+function showUpdate(state) {
+  updateState = state;
+  el('version').textContent = `Версия ${state.currentVersion}`;
+  el('update-status').textContent = state.message +
+    (state.phase === 'downloading' ? ` ${state.percent || 0}%` : '');
+  el('check-update').disabled = ['unsupported','checking','downloading','downloaded','installing'].includes(state.phase);
+  el('install-update').hidden = state.phase !== 'downloaded';
+  el('install-update').disabled = busy;
+  el('start').disabled = busy || state.phase === 'installing';
+}
+api.onUpdate(showUpdate);
+api.updateState().then(showUpdate).catch(() => {el('update-status').textContent = 'Проверка обновлений недоступна';});
+el('check-update').addEventListener('click', () => api.checkUpdates().then(showUpdate).catch(error => message(error.message)));
+el('install-update').addEventListener('click', () => api.installUpdate().catch(error => message(error.message)));
 refresh();

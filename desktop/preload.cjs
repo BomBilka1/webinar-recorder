@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld('recorderApp', {
   abort: () => invoke('abort'),
   showFile: () => invoke('show-file'),
   revealWebinar: () => invoke('reveal-webinar'),
+  updateState: () => invoke('update-state'),
+  checkUpdates: () => invoke('check-updates'),
+  installUpdate: () => invoke('install-update'),
+  onUpdate: listener => ipcRenderer.on('update-state', (_event, state) => listener(state)),
   onNotice: listener => ipcRenderer.on('notice', (_event, message) => listener(message)),
   onSourceEnded: listener => ipcRenderer.on('source-ended', () => listener())
 });

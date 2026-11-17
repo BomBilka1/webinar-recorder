@@ -31,12 +31,6 @@ document.querySelector('button').onclick=()=>{window.audio=new AudioContext();co
     const webinar=await opened;
     await webinar.locator('button').click();
     await ui.locator('#refresh').click();
-    await ui.locator('#start').click();
-    await ui.waitForTimeout(1500);
-    console.log('Start state:',await ui.locator('#status').textContent(),await ui.locator('#notice').textContent());
-    await ui.waitForFunction(()=>document.querySelector('#status').textContent.startsWith('Идёт запись'),{},{timeout:20000});
-    await ui.waitForTimeout(1200);
-    const hiddenAt = await ui.evaluate(() => (Date.now() - tick) / 1000);
     // Xvfb may have no window manager to honor minimize. Hide the native windows
     // as well, and verify they are invisible; capture remains completely real.
     const hidden = await app.evaluate(({BrowserWindow}) => {
@@ -45,24 +39,30 @@ document.querySelector('button').onclick=()=>{window.audio=new AudioContext();co
       return windows.every(win => !win.isVisible());
     });
     assert.ok(hidden);
+    // Start after hiding: every encoded frame must originate from a hidden
+    // window, independent of media timestamps and slower CI scheduling.
+    await ui.evaluate(() => document.querySelector('#start').click());
+    await ui.waitForFunction(()=>document.querySelector('#status').textContent.startsWith('Идёт запись'),{},{timeout:20000});
     await ui.waitForTimeout(4300);
-    await ui.locator('#pause').click();
+    await ui.evaluate(() => document.querySelector('#pause').click());
+    assert.equal(await ui.evaluate(() => recorder.state),'paused');
     await ui.waitForTimeout(1000);
-    await ui.locator('#pause').click();
+    await ui.evaluate(() => document.querySelector('#pause').click());
     await ui.waitForTimeout(1200);
-    await ui.locator('#stop').click();
+    await ui.evaluate(() => document.querySelector('#stop').click());
     await ui.waitForFunction(()=>document.querySelector('#status').textContent==='Запись сохранена',{},{timeout:20000});
     assert.deepEqual(errors,[]);
+    assert.ok(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().every(win=>!win.isVisible())));
     const probe = JSON.parse(execFileSync('ffprobe',['-v','error','-show_streams','-show_format','-of','json',output],{encoding:'utf8'}));
     assert.ok(probe.streams.some(s=>s.codec_type==='video'));
     assert.ok(probe.streams.some(s=>s.codec_type==='audio'));
     const timestamps=execFileSync('ffprobe',['-v','error','-show_entries','packet=pts_time','-of','csv=p=0',output],{encoding:'utf8'}).trim().split('\n').map(Number);
     const recordedSeconds=Math.max(...timestamps.filter(Number.isFinite));
     assert.ok(recordedSeconds>5,`Recorded duration: ${recordedSeconds}`);
-    const frames=execFileSync('ffmpeg',['-v','error','-i',output,'-ss',String(hiddenAt+1),'-t','2','-map','0:v:0','-vf','fps=2','-f','framemd5','-'],{encoding:'utf8'});
+    const frames=execFileSync('ffmpeg',['-v','error','-i',output,'-map','0:v:0','-vf','fps=2','-f','framemd5','-'],{encoding:'utf8'});
     const hashes=frames.split('\n').filter(line=>line && !line.startsWith('#')).map(line=>line.split(',').pop().trim());
     assert.ok(new Set(hashes).size>=3,'Video must continue changing while hidden');
-    const pcm=execFileSync('ffmpeg',['-v','error','-i',output,'-ss',String(hiddenAt+1),'-t','2','-vn','-f','s16le','-ac','1','-ar','8000','-']);
+    const pcm=execFileSync('ffmpeg',['-v','error','-i',output,'-vn','-f','s16le','-ac','1','-ar','8000','-']);
     let energy=0;for(let i=0;i<pcm.length;i+=2) energy+=Math.abs(pcm.readInt16LE(i));
     assert.ok(energy>100000,'Audio must contain a real signal');
     console.log('PASS: real webinar video + audio while native windows are hidden; pause/resume; saved WebM.',recordedSeconds);

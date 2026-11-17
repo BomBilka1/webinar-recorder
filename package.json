@@ -1,7 +1,7 @@
 {
   "name": "webinar-recorder",
   "productName": "Webinar Recorder",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Настольная запись вебинаров со звуком в фоне",
   "private": true,
   "main": "desktop/main.cjs",
@@ -9,10 +9,21 @@
     "start": "electron .",
     "test": "node --test tests-desktop/*.test.cjs",
     "test:desktop": "node tests-desktop/integration.cjs",
-    "build:portable": "python3 scripts/package.py"
+    "build:portable": "python3 scripts/package.py",
+    "dist:win": "electron-builder --config electron-builder.cjs --win nsis --x64",
+    "pack:win": "electron-builder --config electron-builder.cjs --win --x64 --dir"
   },
   "devDependencies": {
     "electron": "45.3.3",
+    "electron-builder": "26.18.0",
     "playwright": "1.65.1"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11"
+  },
+  "author": "BomBilka1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BomBilka1/webinar-recorder.git"
   }
 }

@@ -2,11 +2,13 @@ const {app, BrowserWindow, ipcMain, dialog, session, desktopCapturer,
   powerSaveBlocker, shell, Tray, Menu, nativeImage} = require('electron');
 const path = require('node:path');
 const {FileSession} = require('./file-session.cjs');
+const {UpdateManager} = require('./update-manager.cjs');
+const {existsSync} = require('node:fs');
 
 // Capturing a webContents keeps rendering independent of the desktop window.
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
-let control, webinar, tray, file, selection, power, lastFile, preparing = false, paintTimer;
+let control, webinar, tray, file, selection, power, lastFile, preparing = false, paintTimer, updates;
 const browsers = new Set();
 const isTest = process.env.WEBINAR_TEST === '1' && !app.isPackaged;
 if (isTest && process.env.WEBINAR_TEST_PROFILE) app.setPath('userData', process.env.WEBINAR_TEST_PROFILE);
@@ -129,6 +131,7 @@ app.whenReady().then(async () => {
         .map(source => ({id:source.id,name:source.name}))};
   });
   handle('prepare', async options => {
+    if (updates?.installing) throw new Error('Выполняется установка обновления. Дождитесь перезапуска программы');
     if (busy()) throw new Error('Запись уже идёт');
     preparing = true;
     try {
@@ -169,15 +172,27 @@ app.whenReady().then(async () => {
     if (!file) throw new Error('Нет открытого файла');
     const current = file;
     try {const result = await current.finish();lastFile = result.path;return result;}
-    finally {file = null;selection = null;releasePower();}
+    finally {file = null;selection = null;releasePower();updates?.onIdle();}
   });
   handle('abort', async () => {
     if (!file) return null;
     const current = file;
     try {const result = await current.abort();lastFile = result.path;return result;}
-    finally {file = null;selection = null;releasePower();}
+    finally {file = null;selection = null;releasePower();updates?.onIdle();}
   });
   handle('show-file', () => {if (lastFile) shell.showItemInFolder(lastFile);});
+
+  const updateEnabled = app.isPackaged && process.platform === 'win32' &&
+    existsSync(path.join(process.resourcesPath,'app-update.yml'));
+  updates = new UpdateManager({updater:updateEnabled ? require('electron-updater').autoUpdater : null,
+    isBusy:busy,version:app.getVersion(),notify:state => {
+      if (!control.isDestroyed()) control.webContents.send('update-state',state);
+    }});
+  handle('update-state', () => updates.snapshot());
+  handle('check-updates', () => updates.check());
+  handle('install-update', () => updates.install());
+  updates.start();
+  app.once('will-quit', () => updates.dispose());
 
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname,'tray.png')));
   tray.setToolTip('Запись вебинара');
