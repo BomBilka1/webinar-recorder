@@ -25,7 +25,9 @@ class RecordingSession {
     const raw=this.options.format==='mp4'?`${target}.${randomUUID()}.source.webm`:target;
     const file=await FileSession.open(raw);
     this.file=file;this.segment={number:index,path:target,raw,partial:file.partial,status:'recording',duration:0,bytes:0};
-    this.entry.segments.push(this.segment);await this.library.save();
+    this.entry.segments.push(this.segment);
+    try{await this.library.save();}
+    catch(error){await file.abort().catch(()=>{});this.file=null;this.segment.status='interrupted';throw error;}
   }
   async write(data){
     const bytes=await this.file.write(data);
@@ -58,7 +60,7 @@ class RecordingSession {
         }catch(e){segment.status='error';segment.error=e.message;this.errors.push(e.message);}
         await this.library.save();this.notify('history',{});
       }).catch(error=>{this.errors.push(error.message);this.notify('processing-error',{message:error.message});});
-    }catch(e){segment.status='interrupted';segment.error=e.message;await this.library.save();throw e;}
+    }catch(e){segment.status='interrupted';segment.bytes=file.bytes;segment.error=e.message;await this.library.save();throw e;}
   }
   async rotate(duration){await this.closeSegment(duration);await this.next();return {partial:this.file.partial,number:this.segment.number};}
   async finish(duration){
@@ -74,7 +76,16 @@ class RecordingSession {
   async abort(){
     let result;
     if(this.file){result=await this.file.abort();this.file=null;this.segment.status='interrupted';this.segment.bytes=result.bytes;}
-    await this.work;this.entry.status=this.totalBytes || result?.bytes?'interrupted':'cancelled';await this.library.save();return result;
+    await this.work;
+    if(!result){
+      for(const segment of [...this.entry.segments].reverse()){
+        for(const candidate of [segment.partial,segment.raw]){
+          try{const stat=await fs.stat(candidate);if(stat.size){result={path:candidate,bytes:stat.size};break;}}catch{}
+        }
+        if(result)break;
+      }
+    }
+    this.entry.status=this.totalBytes || result?.bytes?'interrupted':'cancelled';await this.library.save();return result;
   }
 }
 module.exports={RecordingSession};

@@ -50,6 +50,10 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Validate files and bundled converter on Windows
+        run: |
+          npm test
+          node tests-desktop/windows-tools.cjs
       - name: Build Windows window-state and application-audio helper
         run: |
           cmake -S native -B native/build -A x64

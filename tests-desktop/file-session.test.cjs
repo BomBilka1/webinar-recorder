@@ -65,3 +65,15 @@ test('indexing failure preserves original partial and existing destination', asy
   assert.equal(await fs.readFile(file.partial,'utf8'),'recording');
   assert.equal(await fs.readFile(dest,'utf8'),'previous');
 });
+
+test('disk fills during the first chunk: physically written bytes remain recoverable', async t=>{
+  const dest=await fixture(t),file=await FileSession.open(dest);
+  const write=file.handle.write.bind(file.handle);let first=true;
+  file.handle.write=async (buffer,offset)=>{
+    if(!first)throw new Error('Disk full');first=false;
+    return write(buffer,offset,3);
+  };
+  await assert.rejects(file.write(Buffer.from('abcdef')),/Disk full/);
+  const recovered=await file.abort();assert.equal(recovered.bytes,3);
+  assert.equal(await fs.readFile(file.partial,'utf8'),'abc');
+});

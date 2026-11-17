@@ -73,6 +73,8 @@ function releasePower() {
 }
 function restore() { control.show(); control.restore(); control.focus(); }
 
+if(isTest || app.requestSingleInstanceLock()) {
+app.on('second-instance',()=>{if(control && !control.isDestroyed())restore();});
 app.whenReady().then(async () => {
   control = new BrowserWindow({width:920,height:900,minWidth:700,minHeight:700,
     title:'Запись вебинара',backgroundColor:'#101522',autoHideMenuBar:true,
@@ -309,5 +311,6 @@ app.whenReady().then(async () => {
     {label:'Выход',click:() => {if (busy()) {restore();notice('Сначала остановите и сохраните запись.');} else control.close();}}]));
   tray.on('click',restore);
   await control.loadFile(path.join(__dirname,'index.html'));
-});
+}).catch(error=>{dialog.showErrorBox('Не удалось запустить программу',error.message);app.quit();});
+} else {app.quit();}
 app.on('window-all-closed', () => app.quit());

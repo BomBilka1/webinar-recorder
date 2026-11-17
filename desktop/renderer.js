@@ -224,7 +224,7 @@ function captureWarning(text='') {
 }
 async function monitorCapture() {
   const video=el('monitor-video');video.srcObject=new MediaStream(stream.getVideoTracks());
-  await video.play();el('monitor').hidden=false;lastFrameHash=null;lastFrameChange=Date.now();windowMinimized=false;
+  video.play().catch(()=>captureWarning('Не удалось показать предпросмотр. Проверьте окно источника.'));el('monitor').hidden=false;lastFrameHash=null;lastFrameChange=Date.now();windowMinimized=false;
   const ctx=el('monitor').getContext('2d',{willReadFrequently:true});
   monitorTimer=setInterval(()=>{
     sampleLevel(sourceAnalyser,'source-level');sampleLevel(micAnalyser,'mic-level');

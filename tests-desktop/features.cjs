@@ -6,7 +6,6 @@ const path=require('node:path');
 const os=require('node:os');
 const http=require('node:http');
 const {execFileSync}=require('node:child_process');
-const {MediaTools}=require('../desktop/media-tools.cjs');
 const root=path.resolve(__dirname,'..');
 const fixture=`<!doctype html><title>Feature test</title><canvas width="640" height="360"></canvas><button>Audio</button><script>
 const ctx=document.querySelector('canvas').getContext('2d');let frame=0;
@@ -25,10 +24,11 @@ function probe(file){return JSON.parse(execFileSync('ffprobe',['-v','error','-sh
   await ui.locator('#mode').selectOption('webinar');await ui.locator('#url').fill(`http://127.0.0.1:${server.address().port}`);
   const opened=app.waitForEvent('window');await ui.locator('#open').click();const webinar=await opened;await webinar.locator('button').click();
   await ui.locator('#refresh').click();
+  await ui.locator('#recording-options').evaluate(node=>{node.open=true;});
   await ui.evaluate(()=>{const original=navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);navigator.mediaDevices.enumerateDevices=async()=>{const devices=await original();window.testDevices=devices.map(d=>({kind:d.kind,id:d.deviceId,label:d.label}));return devices;};});
   await ui.locator('#microphone-choose').click();
   await ui.waitForFunction(()=>document.querySelector('#microphone-device').options.length>1,{},{timeout:10000}).catch(async error=>{console.error('Microphone UI:',await ui.locator('#notice').innerText(),errors,await ui.evaluate(()=>window.testDevices));throw error;});
-  assert.ok(await ui.locator('#microphone').isChecked());console.log('PASS: microphone choice');
+  assert.ok(await ui.locator('#microphone').isChecked());await ui.locator('#microphone-device').selectOption({index:1});console.log('PASS: microphone choice');
   await ui.locator('#format').selectOption('mp4');await ui.locator('#split').selectOption('1');
   await ui.locator('#start').click();
   await ui.waitForFunction(()=>document.querySelector('#status').textContent.startsWith('Идёт запись'),{},{timeout:20000});
@@ -79,10 +79,20 @@ function probe(file){return JSON.parse(execFileSync('ffprobe',['-v','error','-sh
   await assert.rejects(fs.access(output+'.partial'));
   assert.equal((await ui.evaluate(()=>window.recorderApp.history()))[0].status,'cancelled');
   // Repair real saved files and truncated chunks; never replace the input.
-  const media=new MediaTools({binary:'/usr/bin/ffmpeg'});
   const original=await fs.readFile(output);const truncated=path.join(dir,'truncated.webm.partial');
   await fs.writeFile(truncated,original.subarray(0,original.length-150));
-  const recovered=path.join(dir,'recovered.webm');await media.repair(truncated,recovered);
+  const repairedOld=path.join(dir,'old-repaired.webm');
+  await app.evaluate(({dialog},destination)=>{dialog.showSaveDialog=async()=>({filePath:destination,canceled:false});},repairedOld);
+  await ui.getByRole('button',{name:'Восстановить',exact:true}).first().click();
+  await ui.waitForFunction(()=>document.querySelector('#status').textContent==='Восстановленная копия сохранена',{},{timeout:20000});
+  assert.deepEqual(await fs.readFile(output),original);assert.ok(Number(probe(repairedOld).format.duration)>0);
+  const recovered=path.join(dir,'recovered.webm');
+  await app.evaluate(({dialog},options)=>{
+    dialog.showOpenDialog=async()=>({filePaths:[options.input],canceled:false});
+    dialog.showSaveDialog=async()=>({filePath:options.output,canceled:false});
+  },{input:truncated,output:recovered});
+  await ui.locator('#repair').click();
+  await ui.waitForFunction(()=>document.querySelector('#status').textContent==='Восстановленная копия сохранена',{},{timeout:20000});
   assert.ok(probe(recovered).streams.some(s=>s.codec_type==='video'));assert.ok(Number(probe(recovered).format.duration)>0);
   assert.deepEqual(await fs.readFile(truncated),original.subarray(0,original.length-150));
   assert.deepEqual(errors,[]);

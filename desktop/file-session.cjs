@@ -27,8 +27,8 @@ class FileSession {
           const { bytesWritten } = await this.handle.write(buffer, offset);
           if (!bytesWritten) throw new Error('Диск перестал принимать данные');
           offset += bytesWritten;
+          this.bytes += bytesWritten;
         }
-        this.bytes += buffer.length;
         if (Date.now() - this.lastSync > 10000) {
           await this.handle.sync();
           this.lastSync = Date.now();
