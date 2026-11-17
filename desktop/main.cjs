@@ -1,9 +1,10 @@
 const {app, BrowserWindow, ipcMain, dialog, session, desktopCapturer,
-  powerSaveBlocker, shell, Tray, Menu, nativeImage} = require('electron');
+  powerSaveBlocker, shell, Tray, Menu, nativeImage, screen} = require('electron');
 const path = require('node:path');
 const {FileSession} = require('./file-session.cjs');
 const {UpdateManager} = require('./update-manager.cjs');
 const {existsSync} = require('node:fs');
+const {captureTypes,selectSource,describeSources} = require('./capture-sources.cjs');
 
 // Capturing a webContents keeps rendering independent of the desktop window.
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
@@ -96,9 +97,8 @@ app.whenReady().then(async () => {
         const frame = target.webContents.mainFrame;
         callback({video:frame, ...(selection.audio ? {audio:frame,enableLocalEcho:true} : {})});
       } else {
-        const sources = await desktopCapturer.getSources({types:['screen','window'],thumbnailSize:{width:0,height:0}});
-        const source = sources.find(source => source.id === selection.sourceId);
-        if (!source) return callback(null);
+        const sources = await desktopCapturer.getSources({types:captureTypes(selection.mode),thumbnailSize:{width:0,height:0}});
+        const source = selectSource(sources,selection.mode,selection.sourceId,control.getMediaSourceId());
         callback({video:source,...(selection.audio && process.platform === 'win32' ? {audio:'loopback'} : {})});
       }
     } catch (error) { notice(error.message); callback(null); }
@@ -125,21 +125,24 @@ app.whenReady().then(async () => {
     if (target) {target.show();target.restore();target.focus();}
   });
   handle('sources', async mode => {
-    const external = mode === 'desktop' ? await desktopCapturer.getSources({types:['screen','window'],thumbnailSize:{width:0,height:0}}) : [];
+    const external = mode === 'webinar' ? [] : await desktopCapturer.getSources({
+      types:captureTypes(mode),thumbnailSize:{width:320,height:180},fetchWindowIcons:mode === 'window'});
     return {browsers:[...browsers].map(win => ({id:win.id,name:win.webContents.getTitle() || 'Вебинар'})),
-      external:external.filter(source => source.id !== control.getMediaSourceId())
-        .map(source => ({id:source.id,name:source.name}))};
+      external:mode === 'webinar' ? [] : describeSources(external,mode,control.getMediaSourceId(),screen.getAllDisplays())};
   });
   handle('prepare', async options => {
     if (updates?.installing) throw new Error('Выполняется установка обновления. Дождитесь перезапуска программы');
     if (busy()) throw new Error('Запись уже идёт');
     preparing = true;
     try {
-      if (!['webinar','desktop'].includes(options?.mode)) throw new Error('Выберите источник');
+      if (!['webinar','window','screen'].includes(options?.mode)) throw new Error('Выберите источник');
       if (options.mode === 'webinar') {
         const target = BrowserWindow.fromId(Number(options.browserId));
         if (!target || !browsers.has(target)) throw new Error('Сначала откройте вебинар по ссылке');
-      } else if (typeof options.sourceId !== 'string') throw new Error('Выберите экран или окно');
+      } else {
+        const sources = await desktopCapturer.getSources({types:captureTypes(options.mode),thumbnailSize:{width:0,height:0}});
+        selectSource(sources,options.mode,options.sourceId,control.getMediaSourceId());
+      }
       selection = {mode:options.mode,browserId:Number(options.browserId),sourceId:options.sourceId,audio:!!options.audio};
       const result = isTest ? {filePath:process.env.WEBINAR_TEST_OUTPUT,canceled:false} : await dialog.showSaveDialog(control, {
         title:'Куда сохранить запись',defaultPath:path.join(app.getPath('videos'),`webinar-${new Date().toISOString().replace(/[:.]/g,'-')}.webm`),

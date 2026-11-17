@@ -1,7 +1,7 @@
 {
   "name": "webinar-recorder",
   "productName": "Webinar Recorder",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Настольная запись вебинаров со звуком в фоне",
   "private": true,
   "main": "desktop/main.cjs",
@@ -11,7 +11,8 @@
     "test:desktop": "node tests-desktop/integration.cjs",
     "build:portable": "python3 scripts/package.py",
     "dist:win": "electron-builder --config electron-builder.cjs --win nsis --x64",
-    "pack:win": "electron-builder --config electron-builder.cjs --win --x64 --dir"
+    "pack:win": "electron-builder --config electron-builder.cjs --win --x64 --dir",
+    "test:capture": "node tests-desktop/external-capture.cjs"
   },
   "devDependencies": {
     "electron": "45.3.3",

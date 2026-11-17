@@ -24,6 +24,7 @@ document.querySelector('button').onclick=()=>{window.audio=new AudioContext();co
       WEBINAR_TEST:'1',WEBINAR_TEST_PROFILE:path.join(dir,'profile'),WEBINAR_TEST_OUTPUT:output}});
     const ui = await app.firstWindow();
     const errors=[];ui.on('pageerror',error=>errors.push(error.message));
+    await ui.locator('#mode').selectOption('webinar');
     ui.on('console', message => { if (message.type() === 'error') console.error('UI:',message.text()); });
     await ui.locator('#url').fill(`http://127.0.0.1:${server.address().port}`);
     const opened=app.waitForEvent('window');

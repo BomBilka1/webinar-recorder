@@ -7,20 +7,24 @@
 <link rel="stylesheet" href="style.css">
 <main>
   <header><span class="brand">● WEBINAR RECORDER</span><span class="local">Сохранение на ваш компьютер</span></header>
-  <h1>Вебинар в записи.<br><span>Работайте дальше.</span></h1>
-  <p class="intro">Откройте вебинар внутри программы — его видео и звук будут записываться, даже когда окно свёрнуто.</p>
+  <h1>Запись экрана.<br><span>Окно или весь монитор.</span></h1>
+  <p class="intro">Выберите окно приложения, экран целиком или откройте вебинар внутри программы для записи в фоне.</p>
   <section>
-    <label for="url">Ссылка на вебинар</label>
-    <div class="row"><input id="url" type="url" placeholder="https://…" autocomplete="off"><button id="open">Открыть вебинар</button></div>
-    <button class="link" id="reveal">Показать окно вебинара</button>
     <div class="grid">
-      <div><label for="mode">Что записывать</label><select id="mode"><option value="webinar">Вебинар внутри программы</option><option value="desktop">Экран или другое окно</option></select></div>
+      <div><label for="mode">Что записывать</label><select id="mode"><option value="window">Окно приложения</option><option value="screen">Весь экран</option><option value="webinar">Вебинар внутри программы</option></select></div>
       <div><label for="source">Источник</label><div class="row"><select id="source"><option value="">Сначала откройте вебинар</option></select><button id="refresh" title="Обновить список" aria-label="Обновить список источников">↻</button></div></div>
     </div>
-    <p id="hint" class="hint">Войдите на сайт и запустите видео в открывшемся окне. Если вебинар открылся в новом окне — обновите список и выберите его.</p>
+    <div id="webinar-controls" hidden>
+      <label for="url">Ссылка на вебинар</label>
+      <div class="row"><input id="url" type="url" placeholder="https://…" autocomplete="off"><button id="open">Открыть вебинар</button></div>
+      <button class="link" id="reveal">Показать окно вебинара</button>
+    </div>
+    <p id="hint" class="hint"></p>
+    <div id="source-grid" class="source-grid" role="group" aria-label="Окна и экраны для записи"></div>
+    <p id="selected-source" class="hint" aria-live="polite">Выберите источник записи</p>
     <div class="grid settings">
       <div><label for="quality">Качество</label><select id="quality"><option value="2500000">Обычное · ≈ 1,2 ГБ/час</option><option value="5000000">Высокое · ≈ 2,3 ГБ/час</option></select></div>
-      <label class="check"><input type="checkbox" id="audio" checked> Записывать звук</label>
+      <label class="check"><input type="checkbox" id="audio" checked> <span id="audio-label">Звук системы</span></label>
     </div>
   </section>
   <section class="recording">
