@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('recorderApp', {
   abort: () => invoke('abort'),
   showFile: () => invoke('show-file'),
   revealWebinar: () => invoke('reveal-webinar'),
+  toggleWebinarFullscreen: () => invoke('toggle-webinar-fullscreen'),
   updateState: () => invoke('update-state'),
   checkUpdates: () => invoke('check-updates'),
   installUpdate: () => invoke('install-update'),

@@ -18,18 +18,24 @@
       <label for="url">Ссылка на вебинар</label>
       <div class="row"><input id="url" type="url" placeholder="https://…" autocomplete="off"><button id="open">Открыть вебинар</button></div>
       <button class="link" id="reveal">Показать окно вебинара</button>
+      <button class="link" id="webinar-fullscreen">Развернуть окно (F11)</button>
+      <p class="hint">Чтобы увеличить само видео, нажмите кнопку полноэкранного режима в плеере сайта. Выход — Esc.</p>
     </div>
     <p id="hint" class="hint"></p>
     <div id="source-grid" class="source-grid" role="group" aria-label="Окна и экраны для записи"></div>
     <p id="selected-source" class="hint" aria-live="polite">Выберите источник записи</p>
     <div class="grid settings">
-      <div><label for="quality">Качество</label><select id="quality"><option value="2500000">Обычное · ≈ 1,2 ГБ/час</option><option value="5000000">Высокое · ≈ 2,3 ГБ/час</option></select></div>
+      <div><label for="quality">Качество</label><select id="quality"><option value="2500000">Обычное · ≈ 1,2 ГБ/час</option><option value="5000000">Высокое · ≈ 2,3 ГБ/час</option><option value="10000000">Для динамичного видео · ≈ 4,6 ГБ/час</option></select></div>
       <label class="check"><input type="checkbox" id="audio" checked> <span id="audio-label">Звук системы</span></label>
     </div>
-    <details id="recording-options"><summary>Звук, формат, расписание и разделение файлов</summary>
+    <details id="recording-options"><summary>Частота кадров, звук, формат и расписание</summary>
     <div class="grid">
       <div><label for="audio-scope">Источник звука</label><select id="audio-scope"><option value="system">Вся система</option><option value="application">Выбранное приложение</option></select><p id="audio-help" class="hint"></p></div>
       <div><label class="check"><input type="checkbox" id="microphone"> Добавить микрофон</label><select id="microphone-device" aria-label="Микрофон"><option value="">По умолчанию</option></select><button class="link" id="microphone-choose">Выбрать микрофон…</button></div>
+    </div>
+    <div class="grid">
+      <div><label for="fps">Частота кадров</label><select id="fps"><option value="30">До 30 кадров/с</option><option value="60">До 60 кадров/с · для плавного видео</option></select><p class="hint">Фактическая частота зависит от видео и компьютера. Если запись тормозит, попробуйте 30 кадров/с или размер 1280 × 720.</p></div>
+      <div><label for="resolution">Размер видео</label><select id="resolution"><option value="1080">До 1920 × 1080</option><option value="720">До 1280 × 720 · меньше нагрузка</option></select></div>
     </div>
     <div class="grid">
       <div><label for="format">Формат файла</label><select id="format"><option value="webm">WebM · быстрое сохранение</option><option value="mp4">MP4 · с конвертацией</option></select></div>

@@ -2,7 +2,7 @@ const api = window.recorderApp;
 const el = id => document.getElementById(id);
 let busy = false, stream, recorder, pending = Promise.resolve(), failure,
   bytes = 0, queued = 0, timer, accumulated = 0, tick = 0, finishing = false;
-const controls = ['url','open','mode','source','refresh','quality','audio','audio-scope','microphone','microphone-device','microphone-choose','format','split','schedule-start','schedule-end','duration','repair'];
+const controls = ['url','open','mode','source','refresh','quality','audio','audio-scope','microphone','microphone-device','microphone-choose','fps','resolution','format','split','schedule-start','schedule-end','duration','repair'];
 const message = text => {el('notice').textContent = text || '';};
 const status = text => {el('status').textContent = text;};
 let updateState, sourceRequest = 0, loadingSources = false, capabilities = {},
@@ -127,6 +127,7 @@ el('mode').addEventListener('change', () => {
   refresh();
 });
 el('reveal').addEventListener('click', () => api.revealWebinar());
+el('webinar-fullscreen').addEventListener('click', () => api.toggleWebinarFullscreen().catch(error=>message(error.message)));
 el('show').addEventListener('click', () => api.showFile());
 
 function release() {
@@ -260,12 +261,12 @@ el('start').addEventListener('click',async()=>{
     status('Выберите файл для записи');
     preparedResult=await api.prepare({mode:el('mode').value,browserId:Number(el('source').value),sourceId:el('source').value,
       audio:el('audio').checked,audioScope:el('audio-scope').value,microphone:el('microphone').checked,
-      format:el('format').value,splitMinutes:Number(el('split').value),
+      format:el('format').value,fps:Number(el('fps').value),splitMinutes:Number(el('split').value),
       startAt:el('schedule-start').value?new Date(el('schedule-start').value).getTime():undefined,
       endAt:el('schedule-end').value?new Date(el('schedule-end').value).getTime():undefined,durationMinutes:Number(el('duration').value)});
     if(!preparedResult){status('Запись отменена');lock(false);return;}
     prepared=true;el('file').textContent=`В процессе: ${preparedResult.partial}`;
-    stream=await navigator.mediaDevices.getDisplayMedia({video:{width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:25,max:30}},audio:el('audio').checked && !preparedResult.applicationAudio});
+    stream=await navigator.mediaDevices.getDisplayMedia({video:{width:{ideal:el('resolution').value==='720'?1280:1920,max:el('resolution').value==='720'?1280:1920},height:{ideal:Number(el('resolution').value),max:Number(el('resolution').value)},frameRate:{ideal:Number(el('fps').value),max:Number(el('fps').value)}},audio:el('audio').checked && !preparedResult.applicationAudio});
     if(el('audio').checked && !preparedResult.applicationAudio && !stream.getAudioTracks().length)throw new Error('Источник не предоставил звук. Включите воспроизведение или отключите звук источника');
     if(el('microphone').checked){
       microphoneStream=await navigator.mediaDevices.getUserMedia({audio:el('microphone-device').value?{deviceId:{exact:el('microphone-device').value}}:true,video:false});

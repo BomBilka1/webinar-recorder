@@ -24,8 +24,8 @@ class MediaTools {
   async convert(input,destination,{duration=0}={}) {
     const temp=path.join(path.dirname(destination),`.${path.basename(destination)}.${randomUUID()}.tmp`);
     try {
-      await this.run(['-i',input,'-map','0:v:0','-map','0:a?','-c:v','libx264','-preset','veryfast','-threads','2','-crf','23','-pix_fmt','yuv420p',
-        '-vf','fps=25,pad=ceil(iw/2)*2:ceil(ih/2)*2','-c:a','aac','-b:a','160k','-movflags','+faststart','-progress','pipe:1','-f','mp4','-n',temp],{duration,label:'Сохранение MP4'});
+      await this.run(['-i',input,'-map','0:v:0','-map','0:a?','-c:v','libx264','-preset','veryfast','-threads','2','-bf','0','-crf','23','-pix_fmt','yuv420p',
+        '-vf','pad=ceil(iw/2)*2:ceil(ih/2)*2','-fps_mode','passthrough','-enc_time_base','1:1000','-c:a','aac','-b:a','160k','-movflags','+faststart','-progress','pipe:1','-f','mp4','-n',temp],{duration,label:'Сохранение MP4'});
       const handle=await fs.open(temp,'r+');try{await handle.sync();}finally{await handle.close();}
       await fs.rename(temp,destination);
       return {path:destination,bytes:(await fs.stat(destination)).size};

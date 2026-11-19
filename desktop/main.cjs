@@ -33,9 +33,24 @@ function remoteOptions() {
     autoHideMenuBar:true, webPreferences:{partition:'persist:webinars', nodeIntegration:false,
       contextIsolation:true, sandbox:true, backgroundThrottling:false}};
 }
+function leaveFullscreen(win) {
+  if(win.isDestroyed())return;
+  // The page may be fullscreen in a nested player iframe. Exiting at the top
+  // document clears the entire fullscreen chain without accessing iframe data.
+  return win.webContents.executeJavaScript('document.fullscreenElement ? document.exitFullscreen() : false')
+    .catch(()=>{}).finally(()=>{if(!win.isDestroyed() && win.isFullScreen())win.setFullScreen(false);});
+}
 function watchBrowser(win) {
   browsers.add(win);
   win.webContents.setBackgroundThrottling(false);
+  win.webContents.on('before-input-event', (event,input) => {
+    if(input.type==='keyDown' && input.key==='F11' && !input.isAutoRepeat) {
+      event.preventDefault();
+      if(win.isFullScreen())leaveFullscreen(win);else win.setFullScreen(true);
+    } else if(input.type==='keyDown' && input.key==='Escape' && !input.isAutoRepeat) {
+      leaveFullscreen(win);
+    }
+  });
   win.webContents.on('will-navigate', (event, url) => {
     try { validateURL(url); } catch { event.preventDefault(); }
   });
@@ -130,6 +145,7 @@ app.whenReady().then(async () => {
   });
   const remoteSession = session.fromPartition('persist:webinars');
   remoteSession.setPermissionRequestHandler(async (contents, permission, callback) => {
+    if (permission === 'fullscreen' && [...browsers].some(win=>win.webContents===contents)) return callback(true);
     if (permission !== 'media') return callback(false);
     const result = await dialog.showMessageBox(control, {type:'question',
       message:'Разрешить сайту вебинара камеру / микрофон?',detail:contents.getURL(),
@@ -148,6 +164,14 @@ app.whenReady().then(async () => {
   handle('reveal-webinar', () => {
     const target = selection?.browserId ? BrowserWindow.fromId(selection.browserId) : webinar;
     if (target) {target.show();target.restore();target.focus();}
+  });
+  handle('toggle-webinar-fullscreen', async () => {
+    const target = selection?.browserId ? BrowserWindow.fromId(selection.browserId) : webinar;
+    if (!target || target.isDestroyed() || !browsers.has(target)) throw new Error('Сначала откройте вебинар');
+    target.show();target.restore();
+    const htmlFullscreen=await target.webContents.executeJavaScript('Boolean(document.fullscreenElement)').catch(()=>false);
+    if(htmlFullscreen || target.isFullScreen())await leaveFullscreen(target);else target.setFullScreen(true);
+    target.focus();
   });
   handle('sources', async mode => {
     const external = mode === 'webinar' ? [] : await desktopCapturer.getSources({
@@ -173,11 +197,13 @@ app.whenReady().then(async () => {
       if(!['application','system'].includes(scope))throw new Error('Выберите источник звука');
       if(options.audio && scope==='application' && options.mode!=='webinar' && !own && (!capabilities.applicationAudio || options.mode!=='window'))
         throw new Error('Звук отдельного приложения доступен для окна в Windows 11; для встроенного вебинара — во всех поддерживаемых системах');
+      const fps=options.fps === undefined ? 30 : Number(options.fps);
+      if(![30,60].includes(fps))throw new Error('Частота кадров должна быть 30 или 60');
       const splitMinutes=Number(options.splitMinutes||0);
       if(!Number.isFinite(splitMinutes)||splitMinutes<0||splitMinutes>1440)throw new Error('Разделение: от 0 до 1440 минут');
       timing={...planTimes(options),durationMinutes:Number(options.durationMinutes||0),fixedEnd:!!options.endAt,scheduledStart:!!options.startAt};
       selection={mode:options.mode,browserId:own?.id || (options.mode==='webinar'?Number(options.browserId):null),
-        sourceId:options.sourceId,audio:!!options.audio,audioScope:scope,microphone:!!options.microphone};
+        sourceId:options.sourceId,audio:!!options.audio,audioScope:scope,microphone:!!options.microphone,fps};
       const format=options.format || 'webm';
       if(!['webm','mp4'].includes(format))throw new Error('Выберите формат видео');
       const result = isTest ? {filePath:process.env.WEBINAR_TEST_OUTPUT,canceled:false} : await dialog.showSaveDialog(control, {
@@ -191,16 +217,34 @@ app.whenReady().then(async () => {
       power = powerSaveBlocker.start('prevent-app-suspension');
       if (selection.browserId) {
         const target = BrowserWindow.fromId(selection.browserId);
-        let painting = false;
-        // Native hidden windows can stop submitting compositor frames even with
-        // backgroundThrottling disabled. A tiny visible-page capture wakes the
-        // compositor without showing the native window or copying a full frame.
-        paintTimer = setInterval(async () => {
-          if (painting || target.isDestroyed() || (target.isVisible() && !target.isMinimized())) return;
-          painting = true;
-          try {await target.webContents.capturePage({x:0,y:0,width:1,height:1},{stayHidden:false,stayAwake:true});}
-          catch {} finally {painting = false;}
-        }, 40);
+        const targetInterval = Math.floor(1000 / selection.fps);
+        let interval = targetInterval, lastStart = 0;
+        const pendingCaptures = new Set();
+        // A hidden native window can stop submitting compositor frames. A tiny
+        // page capture wakes it; limit parallel calls and back off on slow PCs.
+        // One stuck capture must not indefinitely prevent all later wakeups.
+        let warned=false;
+        paintTimer = setInterval(() => {
+          if (target.isDestroyed() || (target.isVisible() && !target.isMinimized())) return;
+          const now = performance.now();
+          if(pendingCaptures.size >= 2){
+            if(!warned && now-Math.min(...pendingCaptures)>5000 && file?.entry?.status==='recording'){
+              warned=true;notice('Возможна задержка кадров свёрнутого вебинара. Проверьте предпросмотр; если видео застыло, разверните окно или уменьшите размер записи до 720p.');
+            }
+            return;
+          }
+          if (now - lastStart < interval) return;
+          if (pendingCaptures.size && now - Math.min(...pendingCaptures) < 250) return;
+          lastStart = now;pendingCaptures.add(now);
+          target.webContents.capturePage({x:0,y:0,width:1,height:1},{stayHidden:false,stayAwake:true})
+            .catch(()=>{})
+            .finally(()=>{
+              pendingCaptures.delete(now);
+              const duration=performance.now()-now;
+              if (duration > 70) interval=Math.min(100,Math.max(interval*1.4,35));
+              else if(duration < 25) interval=Math.max(targetInterval,interval-1);
+            });
+        }, Math.floor(targetInterval));
       }
       return {...prepared,...timing,applicationAudio:selection.audio && selection.audioScope==='application' && !selection.browserId};
     } finally {preparing = false;}
